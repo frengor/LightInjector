@@ -136,13 +136,13 @@
                 <configuration>
                     <quiet>true</quiet>
                     <links>
-                        <link>https://javadoc.io/doc/org.jetbrains/annotations/22.0.0/</link>
+                        <link>https://javadoc.io/doc/org.jetbrains/annotations/23.0.0/</link>
                         <link>https://hub.spigotmc.org/javadocs/spigot/</link>
                         <link>https://netty.io/4.1/api/</link>
                     </links>
                     <bottom>
                         <!-- Hacky way to insert custom css without modifying the full css style file -->
-                        <![CDATA[<style>main a[href*="://"]::after{content: none;}</style>Copyright &#169; {inceptionYear}&#x2013;{currentYear}. All rights reserved.]]>
+                        <![CDATA[<style>main a[href*="://"]::after{content: none;}</style>Copyright &#169; {inceptionYear}&#x2013;{currentYear} fren_gor. All rights reserved.]]>
                     </bottom>
                 </configuration>
             </plugin>
