@@ -21,6 +21,7 @@
 
 # IntelliJ Idea Files #
 .idea/
+*.iml
 
 # Maven #
 target/
