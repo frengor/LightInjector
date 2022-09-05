@@ -121,7 +121,7 @@ public abstract class LightInjector {
             try {
                 injectPlayer(p);
             } catch (Exception exception) {
-                plugin.getLogger().log(Level.SEVERE, "An error occurred while injecting a player:", exception);
+                plugin.getLogger().log(Level.SEVERE, "[LightInjector] An error occurred while injecting a player:", exception);
             }
         }
     }
@@ -249,7 +249,7 @@ public abstract class LightInjector {
                     // Run on event loop to avoid a possible data race with injection in injectPlayer()
                     channel.eventLoop().submit(() -> channel.pipeline().remove(identifier));
                 } catch (Exception exception) {
-                    plugin.getLogger().log(Level.SEVERE, "An error occurred while uninjecting a player:", exception);
+                    plugin.getLogger().log(Level.SEVERE, "[LightInjector] An error occurred while uninjecting a player:", exception);
                 }
             }
         }
@@ -293,7 +293,7 @@ public abstract class LightInjector {
                 try {
                     channel.pipeline().addBefore("packet_handler", identifier, handler);
                 } catch (IllegalArgumentException ignored) {
-                    plugin.getLogger().severe("Couldn't inject a player, an handler with identifier '" + identifier + "' is already present");
+                    plugin.getLogger().severe("[LightInjector] Couldn't inject a player, an handler with identifier '" + identifier + "' is already present");
                 }
             }
         });
@@ -385,7 +385,7 @@ public abstract class LightInjector {
                 return; // Don't inject again
             }
 
-            plugin.getLogger().info("Late injection for player " + player.getName());
+            plugin.getLogger().info("[LightInjector] Late injection for player " + player.getName());
             injectChannel(channel).player = player;
         }
 
@@ -436,7 +436,7 @@ public abstract class LightInjector {
                 // Out of memory, re-throw and return immediately
                 throw error;
             } catch (Throwable throwable) {
-                plugin.getLogger().log(Level.SEVERE, "An error occurred while calling onPacketSendAsync:", throwable);
+                plugin.getLogger().log(Level.SEVERE, "[LightInjector] An error occurred while calling onPacketSendAsync:", throwable);
                 throwable.printStackTrace();
                 super.write(ctx, packet, promise);
                 return;
@@ -454,7 +454,7 @@ public abstract class LightInjector {
                 // Out of memory, re-throw and return immediately
                 throw error;
             } catch (Throwable throwable) {
-                plugin.getLogger().log(Level.SEVERE, "An error occurred while calling onPacketReceiveAsync:", throwable);
+                plugin.getLogger().log(Level.SEVERE, "[LightInjector] An error occurred while calling onPacketReceiveAsync:", throwable);
                 throwable.printStackTrace();
                 super.channelRead(ctx, packet);
                 return;
