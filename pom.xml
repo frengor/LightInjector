@@ -49,6 +49,12 @@
             <id>fren_gor</id>
             <url>https://nexus.frengor.com/repository/public/</url>
         </repository>
+
+        <!-- com.mojang.authlib repo -->
+        <repository>
+            <id>minecraft-repo</id>
+            <url>https://libraries.minecraft.net/</url>
+        </repository>
     </repositories>
 
     <distributionManagement>
@@ -66,8 +72,16 @@
         <!-- Spigot API -->
         <dependency>
             <groupId>org.spigotmc</groupId>
-            <artifactId>spigot</artifactId>
+            <artifactId>spigot-api</artifactId>
             <version>1.19.2-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- com.mojang.authlib -->
+        <dependency>
+            <groupId>com.mojang</groupId>
+            <artifactId>authlib</artifactId>
+            <version>3.5.41</version>
             <scope>provided</scope>
         </dependency>
 

@@ -22,17 +22,13 @@
 
 package com.fren_gor.lightInjector;
 
+import com.mojang.authlib.GameProfile;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.protocol.login.PacketLoginOutSuccess;
-import net.minecraft.server.network.ServerConnection;
 import org.bukkit.Bukkit;
-import org.bukkit.craftbukkit.v1_19_R1.CraftServer;
-import org.bukkit.craftbukkit.v1_19_R1.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -45,7 +41,10 @@ import org.bukkit.event.server.ServerListPingEvent;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Range;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -53,6 +52,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.RandomAccess;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -71,6 +71,27 @@ import java.util.logging.Level;
  */
 public abstract class LightInjector {
 
+    // Used for reflections
+    private static final String COMPLETE_VERSION = Bukkit.getServer().getClass().getName().split("\\.")[3];
+    private static final int VERSION = Integer.parseInt(COMPLETE_VERSION.split("_")[1]);
+
+    private static final Class<?> serverClass = getNMSClass("MinecraftServer", "server");
+    private static final Class<?> serverConnectionClass = getNMSClass("ServerConnection", "server.network");
+    private static final Class<?> networkManagerClass = getNMSClass("NetworkManager", "network");
+    private static final Class<?> entityPlayerClass = getNMSClass("EntityPlayer", "server.level");
+    private static final Class<?> playerConnectionClass = getNMSClass("PlayerConnection", "server.network");
+    private static final Class<?> packetLoginOutSuccessClass = getNMSClass("PacketLoginOutSuccess", "network.protocol.login");
+
+    private static final Field nmsServer = getField(getCBClass("CraftServer"), serverClass, 1);
+    private static final Field nmsServerConnection = getField(serverClass, serverConnectionClass, 1);
+    private static final Field nmsNetworkManagersList = getField(serverConnectionClass, List.class, 2);
+    private static final Field nmsChannelFromNM = getField(networkManagerClass, Channel.class, 1);
+    private static final Field gameProfileFromPacket = getField(packetLoginOutSuccessClass, GameProfile.class, 1);
+    private static final Field getPlayerConnection = getField(entityPlayerClass, playerConnectionClass, 1);
+    private static final Field getNetworkManager = getField(playerConnectionClass, networkManagerClass, 1);
+
+    private static final Method getPlayerHandle = getMethod(getCBClass("entity.CraftPlayer"), "getHandle");
+
     // Used to make identifiers unique if multiple instances are created. This doesn't need to be atomic
     // since it is called only from the constructor, which is assured to run on the main thread
     private static int ID = 0;
@@ -79,7 +100,7 @@ public abstract class LightInjector {
     private final String identifier; // The identifier used to register the ChannelHandler into the channel pipeline
 
     // The list of NetworkManagers
-    private final List<NetworkManager> networkManagers;
+    private final List<?> networkManagers;
 
     private final EventListener listener = new EventListener();
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -95,24 +116,32 @@ public abstract class LightInjector {
      * Note that it is possible to create more than one instance per plugin.
      *
      * @param plugin The {@link Plugin} which is instantiating this injector.
-     * @throws NullPointerException When the provided {@code plugin} is {@code null}.
+     * @throws NullPointerException If the provided {@code plugin} is {@code null}.
      * @throws IllegalStateException When <b>not</b> called from the main thread.
+     * @throws IllegalArgumentException If the provided {@code plugin} is not enabled.
      */
     public LightInjector(@NotNull Plugin plugin) {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("LightInjector must be constructed on the main thread.");
         }
-
-        this.plugin = Objects.requireNonNull(plugin, "Plugin is null.");
-        this.identifier = Objects.requireNonNull(getIdentifier(), "getIdentifier() returned a null value.") + '-' + ID++;
-
-        final ServerConnection conn = ((CraftServer) Bukkit.getServer()).getServer().ad();
-
-        if (conn == null) {
-            throw new RuntimeException("This shouldn't have happened."); // Should never happen
+        if (!Objects.requireNonNull(plugin, "Plugin is null.").isEnabled()) {
+            throw new IllegalArgumentException("Plugin " + plugin.getName() + " is not enabled");
         }
 
-        this.networkManagers = conn.e();
+        this.plugin = plugin;
+        this.identifier = Objects.requireNonNull(getIdentifier(), "getIdentifier() returned a null value.") + '-' + ID++;
+
+        try {
+            Object conn = nmsServerConnection.get(nmsServer.get(Bukkit.getServer()));
+
+            if (conn == null) {
+                throw new RuntimeException("[LightInjector] ServerConnection is null."); // Should never happen
+            }
+
+            networkManagers = (List<?>) nmsNetworkManagersList.get(conn);
+        } catch (ReflectiveOperationException exception) {
+            throw new RuntimeException("[LightInjector] An error occurred while injecting.", exception);
+        }
 
         Bukkit.getPluginManager().registerEvents(listener, plugin);
 
@@ -242,7 +271,7 @@ public abstract class LightInjector {
         listener.unregister();
 
         synchronized (networkManagers) { // Lock out Minecraft
-            for (NetworkManager manager : networkManagers) {
+            for (Object manager : networkManagers) {
                 try {
                     Channel channel = getChannel(manager);
 
@@ -301,16 +330,24 @@ public abstract class LightInjector {
         return handler;
     }
 
-    private NetworkManager getNetworkManager(Player player) {
-        return ((CraftPlayer) player).getHandle().b.b;
+    private Object getNetworkManager(Player player) {
+        try {
+            return getNetworkManager.get(getPlayerConnection.get(getPlayerHandle.invoke(player)));
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("[LightInjector] Couldn't get player's network manager.", e);
+        }
     }
 
     private Channel getChannel(Player player) {
         return getChannel(getNetworkManager(player));
     }
 
-    private Channel getChannel(NetworkManager manager) {
-        return manager.m;
+    private Channel getChannel(Object networkManager) {
+        try {
+            return (Channel) nmsChannelFromNM.get(networkManager);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("[LightInjector] Couldn't get network manager's channel.", e);
+        }
     }
 
     // Don't implement Listener for LightInjector in order to hide the event listener from the public API interface
@@ -329,21 +366,21 @@ public abstract class LightInjector {
                     // Faster for loop
                     // Iterating backwards is better since new NetworkManagers should be added at the end of the list
                     for (int i = networkManagers.size() - 1; i >= 0; i--) {
-                        NetworkManager manager = networkManagers.get(i);
-                        injectNetworkManager(manager);
+                        Object networkManager = networkManagers.get(i);
+                        injectNetworkManager(networkManager);
                     }
                 } else {
                     // Using standard foreach to avoid any potential performance issues
                     // (networkManagers should be an ArrayList, but we cannot be sure about that due to forks)
-                    for (NetworkManager manager : networkManagers) {
-                        injectNetworkManager(manager);
+                    for (Object networkManager : networkManagers) {
+                        injectNetworkManager(networkManager);
                     }
                 }
             }
         }
 
-        private void injectNetworkManager(NetworkManager manager) {
-            Channel channel = getChannel(manager);
+        private void injectNetworkManager(Object networkManager) {
+            Channel channel = getChannel(networkManager);
             // This check avoids useless injections
             if (!injectedChannels.contains(channel)) {
                 injectChannel(channel);
@@ -369,8 +406,8 @@ public abstract class LightInjector {
 
             // At worst, if player hasn't successfully been injected in the previous steps, it's injected now.
             // At this point the Player's PlayerConnection field should have been initialized to a non-null value
-            NetworkManager manager = getNetworkManager(player);
-            Channel channel = getChannel(manager);
+            Object networkManager = getNetworkManager(player);
+            Channel channel = getChannel(networkManager);
             @Nullable ChannelHandler channelHandler = channel.pipeline().get(identifier);
             if (channelHandler != null) {
                 // A channel handler named identifier has been found
@@ -419,13 +456,17 @@ public abstract class LightInjector {
 
         @Override
         public void write(ChannelHandlerContext ctx, Object packet, ChannelPromise promise) throws Exception {
-            if (player == null && packet instanceof PacketLoginOutSuccess) {
+            if (player == null && packetLoginOutSuccessClass.isInstance(packet)) {
                 // Player object should be in cache. If it's not, then it'll be PlayerJoinEvent to set the player
-                @Nullable Player player = playerCache.remove(((PacketLoginOutSuccess) packet).b().getId());
+                try {
+                    @Nullable Player player = playerCache.remove(((GameProfile) gameProfileFromPacket.get(packet)).getId());
 
-                // Set the player only if it was contained into the cache
-                if (player != null) {
-                    this.player = player;
+                    // Set the player only if it was contained into the cache
+                    if (player != null) {
+                        this.player = player;
+                    }
+                } catch (ReflectiveOperationException exception) {
+                    plugin.getLogger().log(Level.SEVERE, "[LightInjector] An error occurred while handling PacketLoginOutSuccess:", exception);
                 }
             }
 
@@ -461,6 +502,106 @@ public abstract class LightInjector {
             }
             if (newPacket != null)
                 super.channelRead(ctx, newPacket);
+        }
+    }
+
+    // ====================================== Reflection stuff ======================================
+
+    private static Class<?> getNMSClass(String name, String mcPackage) {
+        String path = "net.minecraft." + (VERSION >= 17 ? mcPackage : "server." + COMPLETE_VERSION) + '.' + name;
+        try {
+            return Class.forName(path);
+        } catch (ClassNotFoundException exception) {
+            throw new RuntimeException("[LightInjector] Cannot find NMS Class! (" + path + ')', exception);
+        }
+    }
+
+    private static Class<?> getCBClass(String name) {
+        String clazz = "org.bukkit.craftbukkit." + COMPLETE_VERSION + "." + name;
+        try {
+            return Class.forName(clazz);
+        } catch (ClassNotFoundException exception) {
+            throw new RuntimeException("[LightInjector] Cannot find CB Class! (" + clazz + ')', exception);
+        }
+    }
+
+    private static Field getField(Class<?> clazz, String name) {
+        try {
+            Field f = clazz.getDeclaredField(name);
+            f.setAccessible(true);
+            return f;
+        } catch (ReflectiveOperationException exception) {
+            throw new RuntimeException("[LightInjector] Cannot find field! (" + clazz.getName() + '.' + name + ')', exception);
+        }
+    }
+
+    private static Field getField(Class<?> clazz, Class<?> type, @Range(from = 1, to = Integer.MAX_VALUE) int index) {
+        final int savedIndex = index;
+        Field[] fields = clazz.getDeclaredFields();
+        for (Field f : fields) {
+            if (type.equals(f.getType()) && --index <= 0) {
+                f.setAccessible(true);
+                return f;
+            }
+        }
+        // Didn't find any field, check with isAssignableFrom
+        index = savedIndex;
+        for (Field f : fields) {
+            if (type.isAssignableFrom(f.getType()) && --index <= 0) {
+                f.setAccessible(true);
+                return f;
+            }
+        }
+
+        throw new RuntimeException("[LightInjector] Cannot find field! (" + savedIndex + getOrdinal(savedIndex) + type.getName() + " in " + clazz.getName() + ')');
+    }
+
+    private static Method getMethod(Class<?> clazz, String name, Class<?>... parameters) {
+        try {
+            Method m = clazz.getDeclaredMethod(name, parameters);
+            m.setAccessible(true);
+            return m;
+        } catch (ReflectiveOperationException exception) {
+            StringJoiner params = new StringJoiner(", ");
+            for (Class<?> p : parameters) {
+                params.add(p.getName());
+            }
+            throw new RuntimeException("[LightInjector] Cannot find method! (" + clazz.getName() + '.' + name + '(' + params.toString() + ')', exception);
+        }
+    }
+
+    private static Method getMethod(Class<?> clazz, Class<?> returnType, @Range(from = 1, to = Integer.MAX_VALUE) int index) {
+        final int savedIndex = index;
+        Method[] methods = clazz.getDeclaredMethods();
+        for (Method m : methods) {
+            if (returnType.equals(m.getReturnType()) && --index <= 0) {
+                m.setAccessible(true);
+                return m;
+            }
+        }
+        // Didn't find any method, check with isAssignableFrom
+        index = savedIndex;
+        for (Method m : methods) {
+            if (returnType.isAssignableFrom(m.getReturnType()) && --index <= 0) {
+                m.setAccessible(true);
+                return m;
+            }
+        }
+
+        throw new RuntimeException("[LightInjector] Cannot find method! (" + savedIndex + getOrdinal(savedIndex) + " returning " + returnType.getName() + " in " + clazz.getName() + ')');
+    }
+
+    // Details are important =P
+    private static String getOrdinal(int i) {
+        switch (i) {
+            case 1:
+                return "st ";
+            case 2:
+                return "nd ";
+            case 3:
+                return "rd ";
+            default:
+                return "th ";
         }
     }
 }
