@@ -64,7 +64,7 @@ import java.util.logging.Level;
  * Can listen to every packet since {@link AsyncPlayerPreLoginEvent} fires (approximately since the set compression
  * packet, see <a href="https://wiki.vg/Protocol_FAQ#What.27s_the_normal_login_sequence_for_a_client.3F">What's the normal login sequence for a client?</a>).
  * <p>
- * Do not listen to packets exchanged during status pings (i.e. server list pings).
+ * Do not (currently) listen to packets exchanged during status pings (i.e. server list pings).
  * Use the {@link ServerListPingEvent} to change the ping information.
  *
  * @author fren_gor
@@ -158,7 +158,7 @@ public abstract class LightInjector {
     /**
      * Called asynchronously (i.e. not from main thread) when a packet is received from a {@link Player}.
      *
-     * @param sender The {@link Player} which sent the packet. May be {@code null} for early packets.
+     * @param sender The {@link Player} which sent the packet. May be {@code null} for early login packets.
      * @param channel The {@link Channel} of the player's connection.
      * @param packet The packet received from player.
      * @return The packet to receive instead, or {@code null} if the packet should be cancelled.
@@ -168,7 +168,7 @@ public abstract class LightInjector {
     /**
      * Called asynchronously (i.e. not from main thread) when a packet is sent to a {@link Player}.
      *
-     * @param receiver The {@link Player} which will receive the packet. May be {@code null} for early packets.
+     * @param receiver The {@link Player} which will receive the packet. May be {@code null} for early login packets.
      * @param channel The {@link Channel} of the player's connection.
      * @param packet The packet to send to the player.
      * @return The packet to send instead, or {@code null} if the packet should be cancelled.
