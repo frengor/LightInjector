@@ -75,22 +75,22 @@ public abstract class LightInjector {
     private static final String COMPLETE_VERSION = Bukkit.getServer().getClass().getName().split("\\.")[3];
     private static final int VERSION = Integer.parseInt(COMPLETE_VERSION.split("_")[1]);
 
-    private static final Class<?> serverClass = getNMSClass("MinecraftServer", "server");
-    private static final Class<?> serverConnectionClass = getNMSClass("ServerConnection", "server.network");
-    private static final Class<?> networkManagerClass = getNMSClass("NetworkManager", "network");
-    private static final Class<?> entityPlayerClass = getNMSClass("EntityPlayer", "server.level");
-    private static final Class<?> playerConnectionClass = getNMSClass("PlayerConnection", "server.network");
-    private static final Class<?> packetLoginOutSuccessClass = getNMSClass("PacketLoginOutSuccess", "network.protocol.login");
+    private static final Class<?> SERVER_CLASS = getNMSClass("MinecraftServer", "server");
+    private static final Class<?> SERVER_CONNECTION_CLASS = getNMSClass("ServerConnection", "server.network");
+    private static final Class<?> NETWORK_MANAGER_CLASS = getNMSClass("NetworkManager", "network");
+    private static final Class<?> ENTITY_PLAYER_CLASS = getNMSClass("EntityPlayer", "server.level");
+    private static final Class<?> PLAYER_CONNECTION_CLASS = getNMSClass("PlayerConnection", "server.network");
+    private static final Class<?> PACKET_LOGIN_OUT_SUCCESS_CLASS = getNMSClass("PacketLoginOutSuccess", "network.protocol.login");
 
-    private static final Field nmsServer = getField(getCBClass("CraftServer"), serverClass, 1);
-    private static final Field nmsServerConnection = getField(serverClass, serverConnectionClass, 1);
-    private static final Field nmsNetworkManagersList = getField(serverConnectionClass, List.class, 2);
-    private static final Field nmsChannelFromNM = getField(networkManagerClass, Channel.class, 1);
-    private static final Field gameProfileFromPacket = getField(packetLoginOutSuccessClass, GameProfile.class, 1);
-    private static final Field getPlayerConnection = getField(entityPlayerClass, playerConnectionClass, 1);
-    private static final Field getNetworkManager = getField(playerConnectionClass, networkManagerClass, 1);
+    private static final Field NMS_SERVER = getField(getCBClass("CraftServer"), SERVER_CLASS, 1);
+    private static final Field NMS_SERVER_CONNECTION = getField(SERVER_CLASS, SERVER_CONNECTION_CLASS, 1);
+    private static final Field NMS_NETWORK_MANAGERS_LIST = getField(SERVER_CONNECTION_CLASS, List.class, 2);
+    private static final Field NMS_CHANNEL_FROM_NM = getField(NETWORK_MANAGER_CLASS, Channel.class, 1);
+    private static final Field GAME_PROFILE_FROM_PACKET = getField(PACKET_LOGIN_OUT_SUCCESS_CLASS, GameProfile.class, 1);
+    private static final Field GET_PLAYER_CONNECTION = getField(ENTITY_PLAYER_CLASS, PLAYER_CONNECTION_CLASS, 1);
+    private static final Field GET_NETWORK_MANAGER = getField(PLAYER_CONNECTION_CLASS, NETWORK_MANAGER_CLASS, 1);
 
-    private static final Method getPlayerHandle = getMethod(getCBClass("entity.CraftPlayer"), "getHandle");
+    private static final Method GET_PLAYER_HANDLE = getMethod(getCBClass("entity.CraftPlayer"), "getHandle");
 
     // Used to make identifiers unique if multiple instances are created. This doesn't need to be atomic
     // since it is called only from the constructor, which is assured to run on the main thread
@@ -132,13 +132,13 @@ public abstract class LightInjector {
         this.identifier = Objects.requireNonNull(getIdentifier(), "getIdentifier() returned a null value.") + '-' + ID++;
 
         try {
-            Object conn = nmsServerConnection.get(nmsServer.get(Bukkit.getServer()));
+            Object conn = NMS_SERVER_CONNECTION.get(NMS_SERVER.get(Bukkit.getServer()));
 
             if (conn == null) {
                 throw new RuntimeException("[LightInjector] ServerConnection is null."); // Should never happen
             }
 
-            networkManagers = (List<?>) nmsNetworkManagersList.get(conn);
+            networkManagers = (List<?>) NMS_NETWORK_MANAGERS_LIST.get(conn);
         } catch (ReflectiveOperationException exception) {
             throw new RuntimeException("[LightInjector] An error occurred while injecting.", exception);
         }
@@ -332,7 +332,7 @@ public abstract class LightInjector {
 
     private Object getNetworkManager(Player player) {
         try {
-            return getNetworkManager.get(getPlayerConnection.get(getPlayerHandle.invoke(player)));
+            return GET_NETWORK_MANAGER.get(GET_PLAYER_CONNECTION.get(GET_PLAYER_HANDLE.invoke(player)));
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("[LightInjector] Couldn't get player's network manager.", e);
         }
@@ -344,7 +344,7 @@ public abstract class LightInjector {
 
     private Channel getChannel(Object networkManager) {
         try {
-            return (Channel) nmsChannelFromNM.get(networkManager);
+            return (Channel) NMS_CHANNEL_FROM_NM.get(networkManager);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("[LightInjector] Couldn't get network manager's channel.", e);
         }
@@ -456,10 +456,10 @@ public abstract class LightInjector {
 
         @Override
         public void write(ChannelHandlerContext ctx, Object packet, ChannelPromise promise) throws Exception {
-            if (player == null && packetLoginOutSuccessClass.isInstance(packet)) {
+            if (player == null && PACKET_LOGIN_OUT_SUCCESS_CLASS.isInstance(packet)) {
                 // Player object should be in cache. If it's not, then it'll be PlayerJoinEvent to set the player
                 try {
-                    @Nullable Player player = playerCache.remove(((GameProfile) gameProfileFromPacket.get(packet)).getId());
+                    @Nullable Player player = playerCache.remove(((GameProfile) GAME_PROFILE_FROM_PACKET.get(packet)).getId());
 
                     // Set the player only if it was contained into the cache
                     if (player != null) {
