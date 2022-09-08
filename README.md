@@ -4,6 +4,9 @@
 # LightInjector
 A light yet complete and fast packet injector for Spigot servers.
 
+## Tested versions
+LightInjector has been successfully tested on **1.8-1.19.2** server versions.
+
 ## How to use
 
 Copy and paste the [`LightInjector`](src/main/java/com/fren_gor/lightInjector/LightInjector.java) class inside your plugin or shade it using maven.
