@@ -50,6 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.RandomAccess;
 import java.util.Set;
 import java.util.StringJoiner;
@@ -85,6 +86,11 @@ public abstract class LightInjector {
     private static final Field NMS_SERVER = getField(getCBClass("CraftServer"), SERVER_CLASS, 1);
     private static final Field NMS_SERVER_CONNECTION = getField(SERVER_CLASS, SERVER_CONNECTION_CLASS, 1);
     private static final Field NMS_NETWORK_MANAGERS_LIST = getField(SERVER_CONNECTION_CLASS, List.class, 2);
+
+    // This field is present only on Paper servers
+    @Nullable
+    private static final Field NMS_NETWORK_MANAGERS_QUEUE = getFieldOrNull(SERVER_CONNECTION_CLASS, Queue.class, 1);
+
     private static final Field NMS_CHANNEL_FROM_NM = getField(NETWORK_MANAGER_CLASS, Channel.class, 1);
     private static final Field GAME_PROFILE_FROM_PACKET = getField(PACKET_LOGIN_OUT_SUCCESS_CLASS, GameProfile.class, 1);
     private static final Field GET_PLAYER_CONNECTION = getField(ENTITY_PLAYER_CLASS, PLAYER_CONNECTION_CLASS, 1);
@@ -101,6 +107,10 @@ public abstract class LightInjector {
 
     // The list of NetworkManagers
     private final List<?> networkManagers;
+
+    // On Paper there is also a (synchronized) Queue of pending NetworkManagers
+    @Nullable
+    private final Queue<?> pendingNetworkManagers;
 
     private final EventListener listener = new EventListener();
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -139,6 +149,12 @@ public abstract class LightInjector {
             }
 
             networkManagers = (List<?>) NMS_NETWORK_MANAGERS_LIST.get(conn);
+
+            if (NMS_NETWORK_MANAGERS_QUEUE != null) {
+                pendingNetworkManagers = (Queue<?>) NMS_NETWORK_MANAGERS_QUEUE.get(conn);
+            } else {
+                pendingNetworkManagers = null;
+            }
         } catch (ReflectiveOperationException exception) {
             throw new RuntimeException("[LightInjector] An error occurred while injecting.", exception);
         }
@@ -376,6 +392,15 @@ public abstract class LightInjector {
                         injectNetworkManager(networkManager);
                     }
                 }
+
+                if (pendingNetworkManagers != null) {
+                    // Paper server, inject NetworkManagers inside the pending queue
+                    // This works since this code is already synchronized over the networkManagers list
+
+                    for (Object networkManager : pendingNetworkManagers) {
+                        injectNetworkManager(networkManager);
+                    }
+                }
             }
         }
 
@@ -554,6 +579,15 @@ public abstract class LightInjector {
         }
 
         throw new RuntimeException("[LightInjector] Cannot find field! (" + savedIndex + getOrdinal(savedIndex) + type.getName() + " in " + clazz.getName() + ')');
+    }
+
+    @Nullable
+    private static Field getFieldOrNull(Class<?> clazz, Class<?> type, @Range(from = 1, to = Integer.MAX_VALUE) int index) {
+        try {
+            return getField(clazz, type, index);
+        } catch (Exception exception) {
+            return null;
+        }
     }
 
     private static Method getMethod(Class<?> clazz, String name, Class<?>... parameters) {
