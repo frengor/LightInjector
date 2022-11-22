@@ -108,8 +108,10 @@ public abstract class LightInjector {
     // The list of NetworkManagers
     private final List<?> networkManagers;
 
-    // On Paper there is also a (synchronized) queue/list (depending on the version) of pending NetworkManagers
-    // The list is present from 1.9 to 1.14. The queue is present since 1.15
+    // On Paper there is also a queue/list (depending on the version) of pending NetworkManagers.
+    // The list is synchronized using Collections.synchronizedList and is present from 1.9 to 1.14.
+    // The queue is an instance of ConcurrentLinkedQueue and replaces the list since 1.15.
+    // Both implements Iterable<NetworkManager>
     @Nullable
     private final Iterable<?> pendingNetworkManagers;
 
@@ -395,7 +397,7 @@ public abstract class LightInjector {
                 }
 
                 if (pendingNetworkManagers != null) {
-                    // Paper server, inject NetworkManagers inside the pending queue
+                    // Paper server, inject NetworkManagers inside the pending queue/list
                     // This works since this code is already synchronized over the networkManagers list
 
                     // Synchronize here since on 1.9-1.14 pendingNetworkManagers is a synchronized list (see Collections#synchronizedList)
