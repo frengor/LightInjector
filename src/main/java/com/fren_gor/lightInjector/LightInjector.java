@@ -89,7 +89,7 @@ public abstract class LightInjector {
 
     // This field is present only on Paper servers
     @Nullable
-    private static final Field NMS_NETWORK_MANAGERS_QUEUE = getFieldOrNull(SERVER_CONNECTION_CLASS, Queue.class, 1);
+    private static final Field NMS_PENDING_NETWORK_MANAGERS = getPendingNetworkManagersFieldOrNull(SERVER_CONNECTION_CLASS);
 
     private static final Field NMS_CHANNEL_FROM_NM = getField(NETWORK_MANAGER_CLASS, Channel.class, 1);
     private static final Field GAME_PROFILE_FROM_PACKET = getField(PACKET_LOGIN_OUT_SUCCESS_CLASS, GameProfile.class, 1);
@@ -108,9 +108,10 @@ public abstract class LightInjector {
     // The list of NetworkManagers
     private final List<?> networkManagers;
 
-    // On Paper there is also a (synchronized) Queue of pending NetworkManagers
+    // On Paper there is also a (synchronized) queue/list (depending on the version) of pending NetworkManagers
+    // The list is present from 1.9 to 1.14. The queue is present since 1.15
     @Nullable
-    private final Queue<?> pendingNetworkManagers;
+    private final Iterable<?> pendingNetworkManagers;
 
     private final EventListener listener = new EventListener();
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -150,8 +151,8 @@ public abstract class LightInjector {
 
             networkManagers = (List<?>) NMS_NETWORK_MANAGERS_LIST.get(conn);
 
-            if (NMS_NETWORK_MANAGERS_QUEUE != null) {
-                pendingNetworkManagers = (Queue<?>) NMS_NETWORK_MANAGERS_QUEUE.get(conn);
+            if (NMS_PENDING_NETWORK_MANAGERS != null) {
+                pendingNetworkManagers = (Iterable<?>) NMS_PENDING_NETWORK_MANAGERS.get(conn);
             } else {
                 pendingNetworkManagers = null;
             }
@@ -397,8 +398,11 @@ public abstract class LightInjector {
                     // Paper server, inject NetworkManagers inside the pending queue
                     // This works since this code is already synchronized over the networkManagers list
 
-                    for (Object networkManager : pendingNetworkManagers) {
-                        injectNetworkManager(networkManager);
+                    // Synchronize here since on 1.9-1.14 pendingNetworkManagers is a synchronized list (see Collections#synchronizedList)
+                    synchronized (pendingNetworkManagers) {
+                        for (Object networkManager : pendingNetworkManagers) {
+                            injectNetworkManager(networkManager);
+                        }
                     }
                 }
             }
@@ -582,12 +586,26 @@ public abstract class LightInjector {
     }
 
     @Nullable
-    private static Field getFieldOrNull(Class<?> clazz, Class<?> type, @Range(from = 1, to = Integer.MAX_VALUE) int index) {
+    private static Field getPendingNetworkManagersFieldOrNull(Class<?> serverConnectionClass) {
         try {
-            return getField(clazz, type, index);
-        } catch (Exception exception) {
-            return null;
+            // The field's name shouldn't be obscured since it's been added by Paper
+            Field pending = getField(serverConnectionClass, "pending");
+            if (pending.getType() == Queue.class || pending.getType() == List.class) {
+                return pending;
+            }
+        } catch (Exception ignored) {
         }
+
+        // No field named pending, try with the queue first
+        try {
+            return getField(serverConnectionClass, Queue.class, 1);
+        } catch (Exception ignored) {
+        }
+        try {
+            return getField(serverConnectionClass, List.class, 3);
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private static Method getMethod(Class<?> clazz, String name, Class<?>... parameters) {
