@@ -64,9 +64,9 @@ import java.util.logging.Level;
  * <p>
  * Can listen to every packet since {@link AsyncPlayerPreLoginEvent} fires (approximately since the set compression
  * packet, see <a href="https://wiki.vg/Protocol_FAQ#What.27s_the_normal_login_sequence_for_a_client.3F">What's the normal login sequence for a client?</a>).
- * <p>
- * Also, very rarely it may happen that some packets are listened before such event, watch out! This shouldn't be an
- * issue for most application, though, since all those packets are login packets and aren't usually intercepted.
+ * <br>
+ * Very rarely, it may happen that some additional login packets get listened before that event is called. However, this
+ * shouldn't be an issue for most applications, since login packets aren't usually intercepted anyway.
  * <p>
  * Do not (currently) listen to packets exchanged during status pings (i.e. server list pings).
  * Use the {@link ServerListPingEvent} to change the ping information.
@@ -129,7 +129,8 @@ public abstract class LightInjector {
     /**
      * Initializes the injector and starts to listen to packets.
      * <p>
-     * Note that it is possible to create more than one instance per plugin.
+     * Note that, while it is possible to create more than one instance per plugin,
+     * it's more efficient and recommended to just have only one.
      *
      * @param plugin The {@link Plugin} which is instantiating this injector.
      * @throws NullPointerException If the provided {@code plugin} is {@code null}.
@@ -283,7 +284,7 @@ public abstract class LightInjector {
      * The uninjection may require some time, so {@link #onPacketReceiveAsync(Player, Channel, Object) onPacketReceiveAsync}
      * and {@link #onPacketSendAsync(Player, Channel, Object) onPacketSendAsync} might still be called after this method returns.
      * <p>
-     * If this injector is already closed then invoking of this method has no effect.
+     * If this injector is already closed then invoking this method has no effect.
      */
     public final void close() {
         if (closed.getAndSet(true)) {
