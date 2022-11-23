@@ -64,6 +64,7 @@ import java.util.logging.Level;
  * <p>
  * Can listen to every packet since {@link AsyncPlayerPreLoginEvent} fires (approximately since the set compression
  * packet, see <a href="https://wiki.vg/Protocol_FAQ#What.27s_the_normal_login_sequence_for_a_client.3F">What's the normal login sequence for a client?</a>).
+ * It may rarely happen that some packets are listened before such event, watch out!
  * <p>
  * Do not (currently) listen to packets exchanged during status pings (i.e. server list pings).
  * Use the {@link ServerListPingEvent} to change the ping information.
@@ -378,9 +379,13 @@ public abstract class LightInjector {
                 return;
             }
 
-            // Inject all not injected managers.
-            // This O(n) operation is used to avoid registering a permanent object inside server's ServerSocketChannel
-            synchronized (networkManagers) { // Lock out Minecraft
+            // Inject all not injected managers. Since the AsyncPlayerPreLoginEvent doesn't expose the player's port number,
+            // it is impossible to uniquely identify the NetworkManager of the logged player (until forthcoming events
+            // are called of course). This is relevant when two players join from the same ip.
+            // Another solution is to register a permanent object inside server's ServerSocketChannel, however that is
+            // not acceptable since LightInjector is meant to be light and reload-safe as much as possible.
+            // Thus, this O(n) operation is used to avoid registering any permanent object.
+            synchronized (networkManagers) { // Lock out main thread
                 if (networkManagers instanceof RandomAccess) {
                     // Faster for loop
                     // Iterating backwards is better since new NetworkManagers should be added at the end of the list
@@ -397,8 +402,7 @@ public abstract class LightInjector {
                 }
 
                 if (pendingNetworkManagers != null) {
-                    // Paper server, inject NetworkManagers inside the pending queue/list
-                    // This works since this code is already synchronized over the networkManagers list
+                    // On Paper servers, inject NetworkManagers inside the pending queue/list.
 
                     // Synchronize here since on 1.9-1.14 pendingNetworkManagers is a synchronized list (see Collections#synchronizedList)
                     synchronized (pendingNetworkManagers) {
@@ -443,7 +447,7 @@ public abstract class LightInjector {
             if (channelHandler != null) {
                 // A channel handler named identifier has been found
                 if (channelHandler instanceof PacketHandler) {
-                    // The player have already been injected, only set the player as a backup in the eventuality
+                    // The player has already been injected, only set the player as a backup in the eventuality
                     // that anything else failed to set it previously.
                     ((PacketHandler) channelHandler).player = player;
 
