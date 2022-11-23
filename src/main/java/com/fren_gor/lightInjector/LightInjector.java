@@ -64,7 +64,9 @@ import java.util.logging.Level;
  * <p>
  * Can listen to every packet since {@link AsyncPlayerPreLoginEvent} fires (approximately since the set compression
  * packet, see <a href="https://wiki.vg/Protocol_FAQ#What.27s_the_normal_login_sequence_for_a_client.3F">What's the normal login sequence for a client?</a>).
- * It may rarely happen that some packets are listened before such event, watch out!
+ * <p>
+ * Also, very rarely it may happen that some packets are listened before such event, watch out! This shouldn't be an
+ * issue for most application, though, since all those packets are login packets and aren't usually intercepted.
  * <p>
  * Do not (currently) listen to packets exchanged during status pings (i.e. server list pings).
  * Use the {@link ServerListPingEvent} to change the ping information.
