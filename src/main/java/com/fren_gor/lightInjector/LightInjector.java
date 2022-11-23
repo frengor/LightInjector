@@ -350,6 +350,14 @@ public abstract class LightInjector {
         return handler;
     }
 
+    private void injectNetworkManager(Object networkManager) {
+        Channel channel = getChannel(networkManager);
+        // This check avoids useless injections
+        if (!injectedChannels.contains(channel)) {
+            injectChannel(channel);
+        }
+    }
+
     private Object getNetworkManager(Player player) {
         try {
             return GET_NETWORK_MANAGER.get(GET_PLAYER_CONNECTION.get(GET_PLAYER_HANDLE.invoke(player)));
@@ -411,14 +419,6 @@ public abstract class LightInjector {
                         }
                     }
                 }
-            }
-        }
-
-        private void injectNetworkManager(Object networkManager) {
-            Channel channel = getChannel(networkManager);
-            // This check avoids useless injections
-            if (!injectedChannels.contains(channel)) {
-                injectChannel(channel);
             }
         }
 
