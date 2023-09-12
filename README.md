@@ -5,7 +5,7 @@
 A light yet complete and fast packet injector for Spigot servers.
 
 ### Tested versions
-LightInjector has been successfully tested on **1.8-1.19.2** server versions.
+LightInjector has been successfully tested on **1.8-1.20.1** server versions.
 
 ## How to use
 
