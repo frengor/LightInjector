@@ -516,7 +516,6 @@ public abstract class LightInjector {
                 throw error;
             } catch (Throwable throwable) {
                 plugin.getLogger().log(Level.SEVERE, "[LightInjector] An error occurred while calling onPacketSendAsync:", throwable);
-                throwable.printStackTrace();
                 super.write(ctx, packet, promise);
                 return;
             }
@@ -534,7 +533,6 @@ public abstract class LightInjector {
                 throw error;
             } catch (Throwable throwable) {
                 plugin.getLogger().log(Level.SEVERE, "[LightInjector] An error occurred while calling onPacketReceiveAsync:", throwable);
-                throwable.printStackTrace();
                 super.channelRead(ctx, packet);
                 return;
             }
