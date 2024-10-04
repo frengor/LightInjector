@@ -66,9 +66,9 @@ import java.util.logging.Level;
  * packet, see <a href="https://wiki.vg/Protocol_FAQ#What.27s_the_normal_login_sequence_for_a_client.3F">What's the normal login sequence for a client?</a>).
  * <br>
  * Very rarely, it may happen that some additional login packets get listened before that event is called. However, this
- * shouldn't be an issue for most applications, since login packets aren't usually intercepted anyway.
+ * should not be an issue for most applications, since login packets are not usually intercepted anyway.
  * <p>
- * Do not (currently) listen to packets exchanged during status pings (i.e. server list pings).
+ * Does not listen to packets exchanged during status pings (i.e. server list pings).
  * Use the {@link ServerListPingEvent} to change the ping information.
  *
  * @author fren_gor
@@ -130,7 +130,7 @@ public abstract class LightInjector {
      * Initializes the injector and starts to listen to packets.
      * <p>
      * Note that, while it is possible to create more than one instance per plugin,
-     * it's more efficient and recommended to just have only one.
+     * it is more efficient and recommended to just have only one.
      *
      * @param plugin The {@link Plugin} which is instantiating this injector.
      * @throws NullPointerException If the provided {@code plugin} is {@code null}.
@@ -345,7 +345,7 @@ public abstract class LightInjector {
                 try {
                     channel.pipeline().addBefore("packet_handler", identifier, handler);
                 } catch (IllegalArgumentException ignored) {
-                    plugin.getLogger().severe("[LightInjector] Couldn't inject a player, an handler with identifier '" + identifier + "' is already present");
+                    plugin.getLogger().severe("[LightInjector] Could not inject a player, an handler with identifier '" + identifier + "' is already present");
                 }
             }
         });
@@ -365,7 +365,7 @@ public abstract class LightInjector {
         try {
             return GET_NETWORK_MANAGER.get(GET_PLAYER_CONNECTION.get(GET_PLAYER_HANDLE.invoke(player)));
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("[LightInjector] Couldn't get player's network manager.", e);
+            throw new RuntimeException("[LightInjector] Could not get player's network manager.", e);
         }
     }
 
@@ -377,7 +377,7 @@ public abstract class LightInjector {
         try {
             return (Channel) NMS_CHANNEL_FROM_NM.get(networkManager);
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("[LightInjector] Couldn't get network manager's channel.", e);
+            throw new RuntimeException("[LightInjector] Could not get network manager's channel.", e);
         }
     }
 
@@ -548,7 +548,7 @@ public abstract class LightInjector {
         try {
             return Class.forName(path);
         } catch (ClassNotFoundException exception) {
-            throw new RuntimeException("[LightInjector] Cannot find NMS Class! (" + path + ')', exception);
+            throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + ')', exception);
         }
     }
 
@@ -557,7 +557,7 @@ public abstract class LightInjector {
         try {
             return Class.forName(clazz);
         } catch (ClassNotFoundException exception) {
-            throw new RuntimeException("[LightInjector] Cannot find CB Class! (" + clazz + ')', exception);
+            throw new RuntimeException("[LightInjector] Can not find CB Class! (" + clazz + ')', exception);
         }
     }
 
@@ -567,7 +567,7 @@ public abstract class LightInjector {
             f.setAccessible(true);
             return f;
         } catch (ReflectiveOperationException exception) {
-            throw new RuntimeException("[LightInjector] Cannot find field! (" + clazz.getName() + '.' + name + ')', exception);
+            throw new RuntimeException("[LightInjector] Can not find field! (" + clazz.getName() + '.' + name + ')', exception);
         }
     }
 
@@ -604,7 +604,7 @@ public abstract class LightInjector {
             index = savedIndex; // Reset index before running the loop again
         }
 
-        String errorMsg = "[LightInjector] Cannot find field! (" + savedIndex + getOrdinal(savedIndex) + type.getName() + " in " + savedClazz.getName();
+        String errorMsg = "[LightInjector] Can not find field! (" + savedIndex + getOrdinal(savedIndex) + type.getName() + " in " + savedClazz.getName();
         if (superClassesToTry > 0) {
             errorMsg += " and in its " + superClassesToTry + (superClassesToTry == 1 ? " super class" : " super classes");
         }
@@ -616,7 +616,7 @@ public abstract class LightInjector {
     @Nullable
     private static Field getPendingNetworkManagersFieldOrNull(Class<?> serverConnectionClass) {
         try {
-            // The field's name shouldn't be obscured since it's been added by Paper
+            // The field's name shouldn't be obfuscated since it's been added by Paper
             Field pending = getField(serverConnectionClass, "pending");
             if (pending.getType() == Queue.class || pending.getType() == List.class) {
                 return pending;
@@ -646,7 +646,7 @@ public abstract class LightInjector {
             for (Class<?> p : parameters) {
                 params.add(p.getName());
             }
-            throw new RuntimeException("[LightInjector] Cannot find method! (" + clazz.getName() + '.' + name + '(' + params.toString() + ')', exception);
+            throw new RuntimeException("[LightInjector] Can not find method! (" + clazz.getName() + '.' + name + '(' + params.toString() + ')', exception);
         }
     }
 
@@ -668,7 +668,7 @@ public abstract class LightInjector {
             }
         }
 
-        throw new RuntimeException("[LightInjector] Cannot find method! (" + savedIndex + getOrdinal(savedIndex) + " returning " + returnType.getName() + " in " + clazz.getName() + ')');
+        throw new RuntimeException("[LightInjector] Can not find method! (" + savedIndex + getOrdinal(savedIndex) + " returning " + returnType.getName() + " in " + clazz.getName() + ')');
     }
 
     // Details are important =P
