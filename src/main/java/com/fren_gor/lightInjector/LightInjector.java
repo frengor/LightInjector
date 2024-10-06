@@ -553,7 +553,7 @@ public abstract class LightInjector {
             try {
                 return Class.forName(path + mojangMappedName);
             } catch (ClassNotFoundException ignored) {
-            throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + ')', exception);
+                throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + ')', exception);
             }
         }
     }
