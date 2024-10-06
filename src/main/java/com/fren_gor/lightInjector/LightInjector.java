@@ -76,15 +76,16 @@ import java.util.logging.Level;
 public abstract class LightInjector {
 
     // Used for reflections
-    private static final String COMPLETE_VERSION = Bukkit.getServer().getClass().getName().split("\\.")[3];
-    private static final int VERSION = Integer.parseInt(COMPLETE_VERSION.split("_")[1]);
+    private static final int VERSION = Integer.parseInt(Bukkit.getBukkitVersion().split("-")[0].split("\\.")[1]);
+    private static final String COMPLETE_VERSION = VERSION >= 17 ? null : Bukkit.getServer().getClass().getName().split("\\.")[3];
+    private static final String CRAFTBUKKIT_PACKAGE = Bukkit.getServer().getClass().getPackage().getName();
 
-    private static final Class<?> SERVER_CLASS = getNMSClass("MinecraftServer", "server");
-    private static final Class<?> SERVER_CONNECTION_CLASS = getNMSClass("ServerConnection", "server.network");
-    private static final Class<?> NETWORK_MANAGER_CLASS = getNMSClass("NetworkManager", "network");
-    private static final Class<?> ENTITY_PLAYER_CLASS = getNMSClass("EntityPlayer", "server.level");
-    private static final Class<?> PLAYER_CONNECTION_CLASS = getNMSClass("PlayerConnection", "server.network");
-    private static final Class<?> PACKET_LOGIN_OUT_SUCCESS_CLASS = getNMSClass("PacketLoginOutSuccess", "network.protocol.login");
+    private static final Class<?> SERVER_CLASS = getNMSClass("MinecraftServer", "MinecraftServer", "server");
+    private static final Class<?> SERVER_CONNECTION_CLASS = getNMSClass("ServerConnection", "ServerConnectionListener", "server.network");
+    private static final Class<?> NETWORK_MANAGER_CLASS = getNMSClass("NetworkManager", "Connection", "network");
+    private static final Class<?> ENTITY_PLAYER_CLASS = getNMSClass("EntityPlayer", "ServerPlayer", "server.level");
+    private static final Class<?> PLAYER_CONNECTION_CLASS = getNMSClass("PlayerConnection", "ServerGamePacketListenerImpl", "server.network");
+    private static final Class<?> PACKET_LOGIN_OUT_SUCCESS_CLASS = getNMSClass("PacketLoginOutSuccess", "ClientboundGameProfilePacket", "network.protocol.login");
 
     private static final Field NMS_SERVER = getField(getCBClass("CraftServer"), SERVER_CLASS, 1);
     private static final Field NMS_SERVER_CONNECTION = getField(SERVER_CLASS, SERVER_CONNECTION_CLASS, 1);
@@ -543,17 +544,22 @@ public abstract class LightInjector {
 
     // ====================================== Reflection stuff ======================================
 
-    private static Class<?> getNMSClass(String name, String mcPackage) {
-        String path = "net.minecraft." + (VERSION >= 17 ? mcPackage : "server." + COMPLETE_VERSION) + '.' + name;
+    private static Class<?> getNMSClass(String spigotMappedName, String mojangMappedName, String mcPackage) {
+        String path = "net.minecraft." + (VERSION >= 17 ? mcPackage : "server." + COMPLETE_VERSION) + '.';
+        // Try both Spigot-mapped and Mojang-mapped names
         try {
-            return Class.forName(path);
+            return Class.forName(path + spigotMappedName);
         } catch (ClassNotFoundException exception) {
+            try {
+                return Class.forName(path + mojangMappedName);
+            } catch (ClassNotFoundException ignored) {
             throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + ')', exception);
+            }
         }
     }
 
     private static Class<?> getCBClass(String name) {
-        String clazz = "org.bukkit.craftbukkit." + COMPLETE_VERSION + "." + name;
+        String clazz = CRAFTBUKKIT_PACKAGE + "." + name;
         try {
             return Class.forName(clazz);
         } catch (ClassNotFoundException exception) {
