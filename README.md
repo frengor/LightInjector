@@ -26,7 +26,7 @@ Copy and paste the [`LightInjector`](src/main/java/com/fren_gor/lightInjector/Li
 <dependency>
     <groupId>com.frengor</groupId>
     <artifactId>lightinjector</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
     <scope>compile</scope>
 </dependency>
 ```
