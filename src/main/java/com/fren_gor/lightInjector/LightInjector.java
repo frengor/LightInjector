@@ -76,8 +76,10 @@ import java.util.logging.Level;
 public abstract class LightInjector {
 
     // Used for reflections
-    private static final int VERSION = Integer.parseInt(Bukkit.getBukkitVersion().split("-")[0].split("\\.")[1]);
-    private static final String COMPLETE_VERSION = VERSION >= 17 ? null : Bukkit.getServer().getClass().getName().split("\\.")[3];
+    private static final String MINECRAFT_VERSION = getMinecraftVersion();
+    private static final int MAJOR_VERSION = Integer.parseInt(MINECRAFT_VERSION.split("\\.")[0]);
+    private static final int VERSION = Integer.parseInt(MINECRAFT_VERSION.split("\\.")[1]);
+    private static final String COMPLETE_VERSION = MAJOR_VERSION >= 26 || (MAJOR_VERSION == 1 && VERSION >= 17) ? null : Bukkit.getServer().getClass().getName().split("\\.")[3];
     private static final String CRAFTBUKKIT_PACKAGE = Bukkit.getServer().getClass().getPackage().getName();
 
     private static final Class<?> SERVER_CLASS = getNMSClass("MinecraftServer", "MinecraftServer", "server");
@@ -545,7 +547,7 @@ public abstract class LightInjector {
     // ====================================== Reflection stuff ======================================
 
     private static Class<?> getNMSClass(String spigotMappedName, String mojangMappedName, String mcPackage) {
-        String path = "net.minecraft." + (VERSION >= 17 ? mcPackage : "server." + COMPLETE_VERSION) + '.';
+        String path = "net.minecraft." + (MAJOR_VERSION >= 26 || (MAJOR_VERSION == 1 && VERSION >= 17) ? mcPackage : "server." + COMPLETE_VERSION) + '.';
         // Try both Spigot-mapped and Mojang-mapped names
         try {
             return Class.forName(path + spigotMappedName);
@@ -555,6 +557,15 @@ public abstract class LightInjector {
             } catch (ClassNotFoundException ignored) {
                 throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + spigotMappedName + ')', exception);
             }
+        }
+    }
+
+    private static String getMinecraftVersion() {
+        try {
+            // Paper-only method
+            return (String) Bukkit.class.getDeclaredMethod("getMinecraftVersion").invoke(null);
+        } catch (ReflectiveOperationException e) {
+            return Bukkit.getBukkitVersion().split("-")[0];
         }
     }
 
