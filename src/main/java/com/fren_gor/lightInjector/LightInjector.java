@@ -87,7 +87,7 @@ public abstract class LightInjector {
     private static final Class<?> NETWORK_MANAGER_CLASS = getNMSClass("NetworkManager", "Connection", "network");
     private static final Class<?> ENTITY_PLAYER_CLASS = getNMSClass("EntityPlayer", "ServerPlayer", "server.level");
     private static final Class<?> PLAYER_CONNECTION_CLASS = getNMSClass("PlayerConnection", "ServerGamePacketListenerImpl", "server.network");
-    private static final Class<?> PACKET_LOGIN_OUT_SUCCESS_CLASS = getNMSClass("PacketLoginOutSuccess", "ClientboundGameProfilePacket", "network.protocol.login");
+    private static final Class<?> PACKET_LOGIN_OUT_SUCCESS_CLASS = getNMSClass("PacketLoginOutSuccess", "ClientboundGameProfilePacket", "network.protocol.login", "ClientboundLoginFinishedPacket");
 
     private static final Field NMS_SERVER = getField(getCBClass("CraftServer"), SERVER_CLASS, 1);
     private static final Field NMS_SERVER_CONNECTION = getField(SERVER_CLASS, SERVER_CONNECTION_CLASS, 1);
@@ -101,6 +101,7 @@ public abstract class LightInjector {
     private static final Field GAME_PROFILE_FROM_PACKET = getField(PACKET_LOGIN_OUT_SUCCESS_CLASS, GameProfile.class, 1);
     private static final Field GET_PLAYER_CONNECTION = getField(ENTITY_PLAYER_CLASS, PLAYER_CONNECTION_CLASS, 1);
     private static final Field GET_NETWORK_MANAGER = getField(PLAYER_CONNECTION_CLASS, NETWORK_MANAGER_CLASS, 1, 1);
+    private static final Field GET_GAME_PROFILE_UUID = getField(GameProfile.class, UUID.class, 1);
 
     private static final Method GET_PLAYER_HANDLE = getMethod(getCBClass("entity.CraftPlayer"), "getHandle");
 
@@ -500,7 +501,8 @@ public abstract class LightInjector {
             if (player == null && PACKET_LOGIN_OUT_SUCCESS_CLASS.isInstance(packet)) {
                 // Player object should be in cache. If it's not, then it'll be PlayerJoinEvent to set the player
                 try {
-                    @Nullable Player player = playerCache.remove(((GameProfile) GAME_PROFILE_FROM_PACKET.get(packet)).getId());
+                    GameProfile gameProfile = (GameProfile) GAME_PROFILE_FROM_PACKET.get(packet);
+                    @Nullable Player player = playerCache.remove((UUID) GET_GAME_PROFILE_UUID.get(gameProfile));
 
                     // Set the player only if it was contained into the cache
                     if (player != null) {
@@ -546,17 +548,25 @@ public abstract class LightInjector {
 
     // ====================================== Reflection stuff ======================================
 
-    private static Class<?> getNMSClass(String spigotMappedName, String mojangMappedName, String mcPackage) {
+    private static Class<?> getNMSClass(String spigotMappedName, String mojangMappedName, String mcPackage, String... additionalMojangMappedNames) {
         String path = "net.minecraft." + (MAJOR_VERSION >= 26 || (MAJOR_VERSION == 1 && VERSION >= 17) ? mcPackage : "server." + COMPLETE_VERSION) + '.';
-        // Try both Spigot-mapped and Mojang-mapped names
         try {
+            // Try Spigot-mapped first
             return Class.forName(path + spigotMappedName);
         } catch (ClassNotFoundException exception) {
             try {
+                // Then try Mojang-mapped
                 return Class.forName(path + mojangMappedName);
             } catch (ClassNotFoundException ignored) {
-                throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + spigotMappedName + ')', exception);
             }
+            // Try additional Mojang-mapped names
+            for (String name : additionalMojangMappedNames) {
+                try {
+                    return Class.forName(path + name);
+                } catch (ClassNotFoundException ignored) {
+                }
+            }
+            throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + spigotMappedName + ')', exception);
         }
     }
 
