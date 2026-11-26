@@ -76,11 +76,13 @@ import java.util.logging.Level;
 public abstract class LightInjector {
 
     // Used for reflections
-    private static final String MINECRAFT_VERSION = getMinecraftVersion();
-    private static final int MAJOR_VERSION = Integer.parseInt(MINECRAFT_VERSION.split("\\.")[0]);
-    private static final int VERSION = Integer.parseInt(MINECRAFT_VERSION.split("\\.")[1]);
+    private static final String[] MINECRAFT_VERSION = getMinecraftVersion().split("\\.");
+    private static final int MAJOR_VERSION = Integer.parseInt(MINECRAFT_VERSION[0]);
+    private static final int VERSION = Integer.parseInt(MINECRAFT_VERSION[1]);
+    private static final int MINOR_VERSION = MINECRAFT_VERSION.length > 2 ? Integer.parseInt(MINECRAFT_VERSION[2]) : 0;
     private static final String COMPLETE_VERSION = MAJOR_VERSION >= 26 || (MAJOR_VERSION == 1 && VERSION >= 17) ? null : Bukkit.getServer().getClass().getName().split("\\.")[3];
     private static final String CRAFTBUKKIT_PACKAGE = Bukkit.getServer().getClass().getPackage().getName();
+    private static final boolean IS_PAPER = classExists("io.papermc.paper.event.server.ServerResourcesReloadedEvent");
 
     private static final Class<?> SERVER_CLASS = getNMSClass("MinecraftServer", "MinecraftServer", "server");
     private static final Class<?> SERVER_CONNECTION_CLASS = getNMSClass("ServerConnection", "ServerConnectionListener", "server.network");
@@ -123,6 +125,7 @@ public abstract class LightInjector {
     private final Iterable<?> pendingNetworkManagers;
 
     private final EventListener listener = new EventListener();
+    private final PlayerLoginEventListener playerLoginEventListener;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     // Used to allow PacketHandlers to set the PacketHandler.player field
@@ -171,6 +174,12 @@ public abstract class LightInjector {
         }
 
         Bukkit.getPluginManager().registerEvents(listener, plugin);
+        // Don't use PlayerLoginEvent on Paper 1.21.7+
+        if (!IS_PAPER || !(MAJOR_VERSION >= 26 || (MAJOR_VERSION == 1 && (VERSION > 21 || (VERSION == 21 && MINOR_VERSION >= 7))))) {
+            Bukkit.getPluginManager().registerEvents(playerLoginEventListener = new PlayerLoginEventListener(), plugin);
+        } else {
+            playerLoginEventListener = null;
+        }
 
         // Inject already online players
         for (Player p : Bukkit.getOnlinePlayers()) {
@@ -298,6 +307,9 @@ public abstract class LightInjector {
         }
 
         listener.unregister();
+        if (playerLoginEventListener != null) {
+            playerLoginEventListener.unregister();
+        }
 
         synchronized (networkManagers) { // Lock out Minecraft
             for (Object manager : networkManagers) {
@@ -432,23 +444,13 @@ public abstract class LightInjector {
         }
 
         @EventHandler(priority = EventPriority.LOWEST)
-        private void onPlayerLoginEvent(PlayerLoginEvent event) {
-            if (isClosed()) {
-                return;
-            }
-
-            // Save Player object for later
-            playerCache.put(event.getPlayer().getUniqueId(), event.getPlayer());
-        }
-
-        @EventHandler(priority = EventPriority.LOWEST)
         private void onPlayerJoinEvent(PlayerJoinEvent event) {
             if (isClosed()) {
                 return;
             }
             Player player = event.getPlayer();
 
-            // At worst, if player hasn't successfully been injected in the previous steps, it's injected now.
+            // If the player hasn't successfully been injected in the previous steps, it's injected now.
             // At this point the Player's PlayerConnection field should have been initialized to a non-null value
             Object networkManager = getNetworkManager(player);
             Channel channel = getChannel(networkManager);
@@ -456,8 +458,7 @@ public abstract class LightInjector {
             if (channelHandler != null) {
                 // A channel handler named identifier has been found
                 if (channelHandler instanceof PacketHandler) {
-                    // The player has already been injected, only set the player as a backup in the eventuality
-                    // that anything else failed to set it previously.
+                    // The player has already been injected, only set the player object
                     ((PacketHandler) channelHandler).player = player;
 
                     // Clear the cache to avoid any possible (but very unlikely to happen) memory leak
@@ -479,9 +480,26 @@ public abstract class LightInjector {
 
         private void unregister() {
             AsyncPlayerPreLoginEvent.getHandlerList().unregister(this);
-            PlayerLoginEvent.getHandlerList().unregister(this);
             PlayerJoinEvent.getHandlerList().unregister(this);
             PluginDisableEvent.getHandlerList().unregister(this);
+        }
+    }
+
+    // Separate listener for PlayerLoginEvent, supported only on Spigot (all versions) and Paper until 1.21.7
+    private final class PlayerLoginEventListener implements Listener {
+
+        @EventHandler(priority = EventPriority.LOWEST)
+        private void onPlayerLoginEvent(PlayerLoginEvent event) {
+            if (isClosed()) {
+                return;
+            }
+
+            // Save Player object for later
+            playerCache.put(event.getPlayer().getUniqueId(), event.getPlayer());
+        }
+
+        private void unregister() {
+            PlayerLoginEvent.getHandlerList().unregister(this);
         }
     }
 
@@ -574,6 +592,15 @@ public abstract class LightInjector {
                 }
             }
             throw new RuntimeException("[LightInjector] Can not find NMS Class! (" + path + spigotMappedName + ')', exception);
+        }
+    }
+
+    private static boolean classExists(String className) {
+        try {
+            Class.forName(className);
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
         }
     }
 
