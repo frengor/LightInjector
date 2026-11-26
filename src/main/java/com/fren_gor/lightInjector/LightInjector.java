@@ -185,26 +185,28 @@ public abstract class LightInjector {
     /**
      * Called asynchronously (i.e. not from main thread) when a packet is received from a {@link Player}.
      *
-     * @param sender The {@link Player} which sent the packet. May be {@code null} for early login packets.
+     * @param senderUuid The {@link UUID} of the player who sent the packet.
+     * @param sender The {@link Player} who sent the packet. May be {@code null} for early login packets.
      * @param channel The {@link Channel} of the player's connection.
      * @param packet The packet received from player.
      * @return The packet to receive instead, or {@code null} if the packet should be cancelled.
      */
-    protected abstract @Nullable Object onPacketReceiveAsync(@Nullable Player sender, @NotNull Channel channel, @NotNull Object packet);
+    protected abstract @Nullable Object onPacketReceiveAsync(@NotNull UUID senderUuid, @Nullable Player sender, @NotNull Channel channel, @NotNull Object packet);
 
     /**
      * Called asynchronously (i.e. not from main thread) when a packet is sent to a {@link Player}.
      *
-     * @param receiver The {@link Player} which will receive the packet. May be {@code null} for early login packets.
+     * @param receiverUuid The {@link UUID} of the player who will receive the packet.
+     * @param receiver The {@link Player} who will receive the packet. May be {@code null} for early login packets.
      * @param channel The {@link Channel} of the player's connection.
      * @param packet The packet to send to the player.
      * @return The packet to send instead, or {@code null} if the packet should be cancelled.
      */
-    protected abstract @Nullable Object onPacketSendAsync(@Nullable Player receiver, @NotNull Channel channel, @NotNull Object packet);
+    protected abstract @Nullable Object onPacketSendAsync(@NotNull UUID receiverUuid, @Nullable Player receiver, @NotNull Channel channel, @NotNull Object packet);
 
     /**
      * Sends a packet to a player. Since the packet will be sent without any special treatment, this will invoke
-     * {@link #onPacketSendAsync(Player, Channel, Object) onPacketSendAsync} when the packet will be intercepted by the
+     * {@link #onPacketSendAsync(UUID, Player, Channel, Object) onPacketSendAsync} when the packet will be intercepted by the
      * injector (any other packet injectors present on the sever will intercept and possibly cancel the packet as well).
      *
      * @param receiver The {@link Player} to which the packet will be sent.
@@ -219,7 +221,7 @@ public abstract class LightInjector {
 
     /**
      * Sends a packet over a {@link Channel}. Since the packet will be sent without any special treatment, this will invoke
-     * {@link #onPacketSendAsync(Player, Channel, Object) onPacketSendAsync} when the packet will be intercepted by the
+     * {@link #onPacketSendAsync(UUID, Player, Channel, Object) onPacketSendAsync} when the packet will be intercepted by the
      * injector (any other packet injectors present on the sever will intercept and possibly cancel the packet as well).
      *
      * @param channel The {@link Channel} on which the packet will be sent.
@@ -234,7 +236,7 @@ public abstract class LightInjector {
 
     /**
      * Acts like if the server has received a packet from a player. Since this process is done without any special
-     * treatment of the packet, this will invoke {@link #onPacketReceiveAsync(Player, Channel, Object) onPacketReceiveAsync}
+     * treatment of the packet, this will invoke {@link #onPacketReceiveAsync(UUID, Player, Channel, Object) onPacketReceiveAsync}
      * when the packet will be intercepted by the injector (any other packet injectors present on the sever will intercept
      * and possibly cancel the packet as well).
      *
@@ -250,7 +252,7 @@ public abstract class LightInjector {
 
     /**
      * Acts like if the server has received a packet over a {@link Channel}. Since this process is done without any
-     * special treatment of the packet, this will invoke {@link #onPacketReceiveAsync(Player, Channel, Object) onPacketReceiveAsync}
+     * special treatment of the packet, this will invoke {@link #onPacketReceiveAsync(UUID, Player, Channel, Object) onPacketReceiveAsync}
      * when the packet will be intercepted by the injector (any other packet injectors present on the sever will intercept
      * and possibly cancel the packet as well).
      *
@@ -285,8 +287,8 @@ public abstract class LightInjector {
      * Closes the injector and uninject every injected player. This method is automatically called when the plugin which
      * instantiated this injector disables, so it is usually unnecessary to invoke it directly.
      * <p>
-     * The uninjection may require some time, so {@link #onPacketReceiveAsync(Player, Channel, Object) onPacketReceiveAsync}
-     * and {@link #onPacketSendAsync(Player, Channel, Object) onPacketSendAsync} might still be called after this method returns.
+     * The uninjection may require some time, so {@link #onPacketReceiveAsync(UUID, Player, Channel, Object) onPacketReceiveAsync}
+     * and {@link #onPacketSendAsync(UUID, Player, Channel, Object) onPacketSendAsync} might still be called after this method returns.
      * <p>
      * If this injector is already closed then invoking this method has no effect.
      */
@@ -335,11 +337,11 @@ public abstract class LightInjector {
     }
 
     private void injectPlayer(Player player) {
-        injectChannel(getChannel(player)).player = player;
+        injectChannel(getChannel(player), player.getUniqueId()).player = player;
     }
 
-    private PacketHandler injectChannel(Channel channel) {
-        PacketHandler handler = new PacketHandler();
+    private PacketHandler injectChannel(Channel channel, UUID uuid) {
+        PacketHandler handler = new PacketHandler(uuid);
 
         // Run on event loop to avoid a possible data race with uninjection in close()
         channel.eventLoop().submit(() -> {
@@ -357,11 +359,11 @@ public abstract class LightInjector {
         return handler;
     }
 
-    private void injectNetworkManager(Object networkManager) {
+    private void injectNetworkManager(Object networkManager, UUID uuid) {
         Channel channel = getChannel(networkManager);
         // This check avoids useless injections
         if (!injectedChannels.contains(channel)) {
-            injectChannel(channel);
+            injectChannel(channel, uuid);
         }
     }
 
@@ -406,13 +408,13 @@ public abstract class LightInjector {
                     // Iterating backwards is better since new NetworkManagers should be added at the end of the list
                     for (int i = networkManagers.size() - 1; i >= 0; i--) {
                         Object networkManager = networkManagers.get(i);
-                        injectNetworkManager(networkManager);
+                        injectNetworkManager(networkManager, event.getUniqueId());
                     }
                 } else {
                     // Using standard foreach to avoid any potential performance issues
                     // (networkManagers should be an ArrayList, but we cannot be sure about that due to forks)
                     for (Object networkManager : networkManagers) {
-                        injectNetworkManager(networkManager);
+                        injectNetworkManager(networkManager, event.getUniqueId());
                     }
                 }
 
@@ -422,7 +424,7 @@ public abstract class LightInjector {
                     // Synchronize here since on 1.9-1.14 pendingNetworkManagers is a synchronized list (see Collections#synchronizedList)
                     synchronized (pendingNetworkManagers) {
                         for (Object networkManager : pendingNetworkManagers) {
-                            injectNetworkManager(networkManager);
+                            injectNetworkManager(networkManager, event.getUniqueId());
                         }
                     }
                 }
@@ -465,7 +467,7 @@ public abstract class LightInjector {
             }
 
             plugin.getLogger().info("[LightInjector] Late injection for player " + player.getName());
-            injectChannel(channel).player = player;
+            injectChannel(channel, player.getUniqueId()).player = player;
         }
 
         @EventHandler(priority = EventPriority.MONITOR)
@@ -484,7 +486,12 @@ public abstract class LightInjector {
     }
 
     private final class PacketHandler extends ChannelDuplexHandler {
+        private final UUID uuid;
         private volatile Player player;
+
+        public PacketHandler(UUID uuid) {
+            this.uuid = Objects.requireNonNull(uuid, "UUID is null.");
+        }
 
         @Override
         public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
@@ -515,7 +522,7 @@ public abstract class LightInjector {
 
             @Nullable Object newPacket;
             try {
-                newPacket = onPacketSendAsync(player, ctx.channel(), packet);
+                newPacket = onPacketSendAsync(uuid, player, ctx.channel(), packet);
             } catch (OutOfMemoryError error) {
                 // Out of memory, re-throw and return immediately
                 throw error;
@@ -532,7 +539,7 @@ public abstract class LightInjector {
         public void channelRead(ChannelHandlerContext ctx, Object packet) throws Exception {
             @Nullable Object newPacket;
             try {
-                newPacket = onPacketReceiveAsync(player, ctx.channel(), packet);
+                newPacket = onPacketReceiveAsync(uuid, player, ctx.channel(), packet);
             } catch (OutOfMemoryError error) {
                 // Out of memory, re-throw and return immediately
                 throw error;

@@ -69,7 +69,7 @@ public class YourClass extends LightInjector {
     }
 
     @Override
-    protected @Nullable Object onPacketReceiveAsync(@Nullable Player sender, @NotNull Channel channel, @NotNull Object nmsPacket) {
+    protected @Nullable Object onPacketReceiveAsync(@NotNull UUID senderUuid, @Nullable Player sender, @NotNull Channel channel, @NotNull Object nmsPacket) {
         // This will be called (asynchronously) when the server receives a packet from a player
         // The sender may be null for early login packets, so always check for it
 
@@ -79,7 +79,7 @@ public class YourClass extends LightInjector {
     }
 
     @Override
-    protected @Nullable Object onPacketSendAsync(@Nullable Player receiver, @NotNull Channel channel, @NotNull Object nmsPacket) {
+    protected @Nullable Object onPacketSendAsync(@NotNull UUID receiverUuid, @Nullable Player receiver, @NotNull Channel channel, @NotNull Object nmsPacket) {
         // This will be called (asynchronously) when the server sends a packet to a player
         // The receiver may be null for early login packets, so always check for it
 
