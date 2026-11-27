@@ -467,7 +467,7 @@ public abstract class LightInjector {
                 return; // Don't inject again
             }
 
-            plugin.getLogger().info("[LightInjector] Late injection for player " + player.getName());
+            plugin.getLogger().warning("[LightInjector] Late injection for player " + player.getName());
             injectChannel(channel, player.getUniqueId()).player = player;
         }
 
