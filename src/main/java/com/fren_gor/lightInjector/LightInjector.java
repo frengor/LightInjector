@@ -60,10 +60,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 /**
- * A light yet complete and fast packet injector for Spigot servers.
+ * A light yet complete and fast packet injector for Spigot and Paper servers.
  * <p>
  * Can listen to every packet since {@link AsyncPlayerPreLoginEvent} fires (approximately since the set compression
- * packet, see <a href="https://wiki.vg/Protocol_FAQ#What.27s_the_normal_login_sequence_for_a_client.3F">What's the normal login sequence for a client?</a>).
+ * packet, see <a href="https://minecraft.wiki/w/Java_Edition_protocol/FAQ#What's_the_normal_login_sequence_for_a_client?">What's the normal login sequence for a client?</a>).
  * <br>
  * Very rarely, it may happen that some additional login packets get listened before that event is called. However, this
  * should not be an issue for most applications, since login packets are not usually intercepted anyway.
